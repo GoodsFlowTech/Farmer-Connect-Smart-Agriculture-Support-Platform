@@ -1,1 +1,0 @@
-# Farmer-Connect-Smart-Agriculture-Support-Platform
