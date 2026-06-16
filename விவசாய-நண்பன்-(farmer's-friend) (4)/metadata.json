@@ -1,0 +1,13 @@
+{
+  "name": "விவசாய நண்பன் (Farmer's Friend)",
+  "description": "An agricultural guide for Tamil farmers with monthly crop schedules and AI-powered disease analysis.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "AI-powered disease analysis",
+    "Seasonal crop guide",
+    "Tamil language support"
+  ]
+}

@@ -1,0 +1,91 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Pillar 0: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Pillar 3: Reusable Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Pillar 2: Validation Blueprint
+    function isValidUser(data) {
+      return data.size() >= 3 && data.size() <= 6
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() <= 100
+        && data.email is string && data.email.size() <= 100
+        && (!('photoURL' in data) || (data.photoURL is string || data.photoURL == null));
+    }
+
+    function isValidReminder(data) {
+      return data.size() >= 5 && data.size() <= 8
+        && data.userId == request.auth.uid
+        && data.cropName is string && data.cropName.size() <= 100
+        && data.taskType is string && data.taskType.size() <= 100
+        && data.status in ['pending', 'completed']
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 500))
+        && (!('createdAt' in data) || data.createdAt is timestamp);
+    }
+
+    // User Collection Rules
+    match /users/{userId} {
+      // Pillar 3: Path Hardening
+      allow get: if isOwner(userId) && isValidId(userId);
+      
+      allow create: if isOwner(userId) 
+        && isValidId(userId)
+        && isValidUser(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+        
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUser(incoming())
+        && incoming().updatedAt == request.time
+        && incoming().createdAt == existing().createdAt
+        && incoming().uid == existing().uid
+        && (incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']));
+    }
+
+    // Reminders Collection Rules
+    match /reminders/{reminderId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid && isValidId(reminderId);
+      
+      allow create: if isSignedIn()
+        && isValidId(reminderId)
+        && isValidReminder(incoming())
+        && incoming().userId == request.auth.uid;
+        
+      allow update: if isSignedIn()
+        && isValidId(reminderId)
+        && existing().userId == request.auth.uid
+        && isValidReminder(incoming())
+        && incoming().userId == existing().userId
+        && (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'taskDate', 'notes', 'taskType']));
+        
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+  }
+}
